@@ -14,6 +14,7 @@ local energyStorageLable = "MFE"
 local powerConverterLable = "Power Converter"
 local chargerLable = "Charger"
 local wrenchLable = "Electric Wrench"
+local energyCrystalLable = "Energy Crystal"
 local previousPos = 0
 
 local function robotTurnAround()
@@ -133,11 +134,11 @@ end
 
 local function chargingInStorage()
   inv.equip()
-  robot.drop(3)
+  inv.dropIntoSlot(3, 1)
   while inv.getStackInSlot(3, 1).charge < inv.getStackInSlot(3, 1).maxCharge do
     os.sleep(1)
   end
-  robot.suck(3)
+  inv.suckFromSlot(3, 1)
   inv.equip()
 end
 
@@ -146,15 +147,18 @@ local function toolCharging()
   robotPlace(2) --Установка сундука с прибамбасами
   local eStorageSlot = suckFromChest(energyStorageLable) --Высасывание МФЭ из сундука в свободный слот инвентаря
   local wrenchSlot = suckFromChest(wrenchLable) --Высасывание электро ключа из сундука в свободный слот инвентаря
+  local crystalSlot = suckFromChest(energyCrystalLable) --Высасывание кристала из сундука в свободный слот инвентаря
   robotStep(2) --Перемещения робота на один блок назад
   robot.select(eStorageSlot) --Выбор слота с МФЭ
   while not robot.place(3) do --Установка МФЭ
     robot.swing()
   end
+  robot.select(crystalSlot) --Выбор слота с кристалом
+  inv.dropIntoSlot(3, 2) --Засунуть кристал во второй слот МФЭ
   chargingInStorage() --Зарядка экипированного инструмента (бура)
+  inv.suckFromSlot(3, 2) --Высасивания кристала из МФЭ
   robot.select(wrenchSlot) --Выбор слота с ключем
   inv.equip() --Экипировка
-  chargingInStorage() --Зарядка экипированного инструмента (ключа)
   robot.select(eStorageSlot) --Выбор слота МФЭ
   robot.use(3) --Откручивание МФЭ
   robot.select(wrenchSlot) --Выбор слота с ключем
@@ -174,8 +178,61 @@ local function checkToolCharge()
   end
 end
 
+local function robotCharging()
+  lootSend() --Отправка лута на базу что бы не мешал
+  robotPlace(2) --Установка сундука с прибамбасами
+  local eStorageSlot = suckFromChest(energyStorageLable) --Высасывание МФЭ из сундука в свободный слот инвентаря
+  local wrenchSlot = suckFromChest(wrenchLable) --Высасывание электро ключа из сундука в свободный слот инвентаря
+  local crystalSlot = suckFromChest(energyCrystalLable) --Высасывание кристала из сундука в свободный слот инвентаря
+  local converterSlot = suckFromChest(powerConverterLable) --Высасывание преобразователя из сундука в свободный слот инвентаря
+  local chargerSlot = suckFromChest(chargerLable) --Высасывание зарядника из сундука в свободный слот инвентаря
+  robotStep(2) --Перемещения робота на один блок назад
+  robot.select(eStorageSlot) --Выбор слота с МФЭ
+  while not robot.place(3) do --Установка МФЭ
+    robot.swing()
+  end
+  robot.select(crystalSlot) --Выбор слота с кристалом
+  inv.dropIntoSlot(3, 2) --Засунуть кристал во второй слот МФЭ
+  robotStep(2) --Перемещения робота на один блок назад
+  robot.select(converterSlot) --Выбор слота с преобразователем
+  while not robot.place(3) do --Установка преобразователя
+    robot.swing()
+  end
+  robotStep(2) --Перемещения робота на один блок назад
+  robot.select(chargerSlot) --Выбор слота с зарядником
+  while not robot.place(3) do --Установка зарядника
+    robot.swing()
+  end
+  rs.setOutput(3, 15) --Подача редстоун сигнала на зарядник
+  while computer.energy() < computer.maxEnergy() * 0.95 do --Ожидание пока робот зарядится до 95%
+    os.sleep(1)
+  end
+  rs.setOutput(3, 0) --Отключения редстоун сигнала
+  robotSwing(chargerSlot) --Ломание зарядника
+  robotStep(3) --Перемещения на один блок вперед
+  robotSwing(converterSlot) --Ломания преобразователя
+  robotStep(3) --Перемещения на один блок вперед
+  slotClearing(crystalSlot)
+  inv.suckFromSlot(3, 2) --Высасивания кристала из МФЭ
+  robot.select(wrenchSlot)
+  inv.equip()
+  slotClearing(eStorageSlot)
+  robot.use(3)
+  robot.select(wrenchSlot)
+  inv.equip()
+  robotStep(3)
+  lootUnload() --Выгрузка всех предметов в сундук
+  robotSwing(2) --Ломания сундука с прибамбасами
+  moveToPreviousPosition() --Возвращение на предыдущую позицию после установки сундука
+end
+
+local function checkRobotCharge()
+  if computer.energy() < computer.maxEnergy() * 0.15 then
+    robotCharging()
+  end
+end
+
 local function main()
-  checkToolCharge()
 end
 
 main()
