@@ -1,6 +1,5 @@
 -- Miner v1 by Litvinov
 local computer = require("computer")
--- local robot = require("robot")
 local com = require("component")
 local ser = require("serialization")
 local fs = require("filesystem")
@@ -9,13 +8,17 @@ local robot = com.robot
 local inv = com.inventory_controller
 local rs = com.redstone
 local invSize = robot.inventorySize()
-local minToolChargeLevel = 0.15 --В процентах от максимального уровня заряда
+local minToolChargeLevel = 0.2 --В процентах от максимального уровня заряда
 local energyStorageLable = "MFE"
 local powerConverterLable = "Power Converter"
 local chargerLable = "Charger"
 local wrenchLable = "Electric Wrench"
 local energyCrystalLable = "Energy Crystal"
 local previousPos = 0
+local height = 32 --Высота дыры которую робот будет расскапывать
+local per1 = 1
+local per2 = 2
+local posUp = false
 
 local function robotTurnAround()
   while not robot.turn(true) do end
@@ -101,14 +104,6 @@ local function robotSwing(slot)
   slotClearing(slot)
   robot.swing(3)
 end
-
--- local function initTechSlots()
---   for slot = 1, invSize do
---     if robot.count(slot) > 0 then
---       techSlots[slot] = slot
---     end
---   end
--- end
 
 local function lootUnload()
   for slot = 3, invSize do
@@ -232,7 +227,58 @@ local function checkRobotCharge()
   end
 end
 
+local function column()
+  checkToolCharge()
+  checkRobotCharge()
+  checkInventory()
+  if posUp then
+    for h = 1, height do
+      robot.swing(0)
+      while not robot.move(0) do
+        robot.swing(0)
+      end
+    end
+    posUp = false
+  else
+    for h = 1, height do
+      robot.swing(1)
+      while not robot.move(1) do
+        robot.swing(1)
+      end
+    end
+    posUp = true
+  end
+end
+
 local function main()
+  while true do
+    column()
+    robot.swing(3)
+    robotStep(3)
+    while not robot.turn(true) do end
+    for i = 1, per1 do
+      column()
+      robot.swing(3)
+      robotStep(3)
+    end
+    while not robot.turn(true) do end
+    for i = 1, 3 do
+      for i = 1, per2 do
+        column()
+        robot.swing(3)
+        robotStep(3)
+      end
+      while not robot.turn(true) do end
+    end
+    for i = 1, per1 do
+      column()
+      robot.swing(3)
+      robotStep(3)
+    end
+    while not robot.turn(false) do end
+    per1 = per1 + 1
+    per2 = per2 + 2
+  end
 end
 
 main()
