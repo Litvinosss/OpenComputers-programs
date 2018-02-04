@@ -9,7 +9,11 @@ local robot = com.robot
 local inv = com.inventory_controller
 local rs = com.redstone
 local invSize = robot.inventorySize()
--- local techSlots = {}
+local minToolChargeLevel = 0.15 --В процентах от максимального уровня заряда
+local energyStorageLable = "MFE"
+local powerConverterLable = "Power Converter"
+local chargerLable = "Charger"
+local wrenchLable = "Electric Wrench"
 local previousPos = 0
 
 local function robotTurnAround()
@@ -40,14 +44,16 @@ local function moveToPreviousPosition()
   end
 end
 
--- local function searchSlot(lbl)
---   for tSlot in pairs(techSlots) do
---     local infStack = inv.getStackInInternalSlot(tSlot)
---     if infStack.label and infStack.label == lbl then
---       return tSlot
---     end
---   end
--- end
+local function searchSlotInChest(lbl)
+  while true do
+    for slot = 1, inv.getInventorySize(3) do
+      local infStack = inv.getStackInSlot(3, slot)
+      if infStack and infStack.label and infStack.label == lbl then
+        return slot
+      end
+    end
+  end
+end
 
 local function freeSlotSearch()
   for s = 3, invSize do
@@ -57,7 +63,8 @@ local function freeSlotSearch()
   end
 end
 
-local function slotClearing()
+local function slotClearing(slot)
+  robot.select(slot)
   while robot.count() > 0 do
     local freeSlot = freeSlotSearch()
     if freeSlot then
@@ -66,6 +73,14 @@ local function slotClearing()
       robot.drop(64, 0)
     end
   end
+end
+
+local function suckFromChest(itemLabel)
+  local slotNumInChest = searchSlotInChest(itemLabel)
+  local freeSlot = freeSlotSearch()
+  robot.select(freeSlot)
+  while not inv.suckFromSlot(3, slotNumInChest) do end
+  return freeSlot
 end
 
 local function robotPlace(slot)
@@ -82,8 +97,7 @@ local function robotPlace(slot)
 end
 
 local function robotSwing(slot)
-  robot.select(slot)
-  slotClearing()
+  slotClearing(slot)
   robot.swing(3)
 end
 
@@ -117,22 +131,51 @@ local function checkInventory()
   end
 end
 
-local function main()
-  lootSend()
+local function chargingInStorage()
+  inv.equip()
+  robot.drop(3)
+  while inv.getStackInSlot(3, 1).charge < inv.getStackInSlot(3, 1).maxCharge do
+    os.sleep(1)
+  end
+  robot.suck(3)
+  inv.equip()
 end
 
+local function toolCharging()
+  lootSend() --Отправка лута на базу что бы не мешал
+  robotPlace(2) --Установка сундука с прибамбасами
+  local eStorageSlot = suckFromChest(energyStorageLable) --Высасывание МФЭ из сундука в свободный слот инвентаря
+  local wrenchSlot = suckFromChest(wrenchLable) --Высасывание электро ключа из сундука в свободный слот инвентаря
+  robotStep(2) --Перемещения робота на один блок назад
+  robot.select(eStorageSlot) --Выбор слота с МФЭ
+  while not robot.place(3) do --Установка МФЭ
+    robot.swing()
+  end
+  chargingInStorage() --Зарядка экипированного инструмента (бура)
+  robot.select(wrenchSlot) --Выбор слота с ключем
+  inv.equip() --Экипировка
+  chargingInStorage() --Зарядка экипированного инструмента (ключа)
+  robot.select(eStorageSlot) --Выбор слота МФЭ
+  robot.use(3) --Откручивание МФЭ
+  robot.select(wrenchSlot) --Выбор слота с ключем
+  inv.equip() --Экипировка
+  robotStep(3) --Перемещение робота на один блок вперед
+  lootUnload() --Выгрузка всех предметов в сундук
+  robotSwing(2) --Ломания сундука с прибамбасами
+  moveToPreviousPosition() --Возвращение на предыдущую позицию после установки сундука
+end
+
+local function checkToolCharge()
+  inv.equip()
+  local infStack = inv.getStackInInternalSlot()
+  inv.equip()
+  if infStack.charge < infStack.maxCharge * minToolChargeLevel then
+    toolCharging()
+  end
+end
+
+local function main()
+  checkToolCharge()
+end
 
 main()
--- print(robot.detect(3))
-
--- local function test()
---   local x = 2
--- end
-
--- if test() then
---   print("bla")
--- end
-
--- for k, v in pairs(techSlots) do
---   print(k, v)
--- end
