@@ -45,18 +45,18 @@ local function rSwing()
   end
 end
 
-local function rMoveBack()
-  while not robot.move(2) do
-    rTurnAround()
-    rSwing()
-    rTurnAround()
-  end
-end
-
 local function rMoveForward()
   rSwing()
   while not robot.move(3) do
     rSwing()
+  end
+end
+
+local function rMoveBack()
+  if not robot.move(2) then
+    rTurnAround()
+    rMoveForward()
+    rTurnAround()
   end
 end
 
