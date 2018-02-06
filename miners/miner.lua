@@ -1,5 +1,5 @@
 -- Miner v2 by Litvinov
--- local computer = require("computer")
+local computer = require("computer")
 local com = require("component")
 -- local ser = require("serialization")
 -- local fs = require("filesystem")
