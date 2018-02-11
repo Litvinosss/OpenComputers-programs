@@ -1,4 +1,4 @@
--- Miner v2 by Litvinov
+-- Miner v3 by Litvinov
 local computer = require("computer")
 local com = require("component")
 -- local ser = require("serialization")
@@ -9,6 +9,8 @@ local inv = com.inventory_controller
 local rs = com.redstone
 local invSize = robot.inventorySize()
 
+local robotNumber = 1 --Номер робота. 1 = самый нижний робот
+local maxRobotNumber = 16 --Номер самого верхнего робота
 local energyCrystalLable = "Energy Crystal" --Название энергетического кристалла
 local chestLootSlot = 1 --Слот с сундуком в который выгружается лут
 local chestChargeSlot = 2 --Слот с сундуком в котором находятся энергетические кристаллы
@@ -17,13 +19,16 @@ local powerConverterSlot = 4 --Слот с преобразователем эн
 local chargerSlot = 5 --Слот с зарядником ОС
 local wrenchSlot = 6 --Слот с электро ключем IC2
 local firstLootSlot = 7 --Первый слот для лута
-local minToolChargeLevel = 0.2 --Уровень заряда при котором требуется зарядка инструмента в процентах от максимального заряда
+local minToolChargeLevel = 0.25 --Уровень заряда при котором требуется зарядка инструмента в процентах от максимального заряда
 local minRobotChargeLevel = 0.2 --Уровень заряда при котором требуется зарядка робота в процентах от максимального заряда
-local numBetChecks = 64 --Через сколько сломанных блоков будет проводится проверка на потребность обслуживания
+local numBetChecks = 32 --Через сколько сломанных блоков будет проводится проверка на потребность обслуживания
+local numBlockSynch = 8 --Через сколько блоков роботы будут синхронизировать своё положение
 
 local circle = 1
 local countSwing = 0
+local countSynch = 0
 local previousPos = 0
+-- local robotSleep = false
 local energyCrystalSlot
 
 local function rTurnL()
@@ -63,13 +68,19 @@ end
 local function rPlace(slot)
   robot.select(slot)
   while not robot.place(3) do
-    local _, detectResult = robot.detect(3)
-    if detectResult == "air" then
+    if robot.detect(3) then
+      rSwing()
+    else
       rMoveForward()
       previousPos = previousPos + 1
-    else
-      rSwing()
     end
+    -- local _, detectResult = robot.detect(3)
+    -- if detectResult == "air" or "liquid" or "replaceable" then --Тут был баг что не мог поставить блок если перед робот вода. Уже в это закомментированной части кода он кажется исправлен. Но выше тестируется более простая версия этого кода на подобные баги
+    --   rMoveForward()
+    --   previousPos = previousPos + 1
+    -- else
+    --   rSwing()
+    -- end
   end
 end
 
@@ -275,6 +286,45 @@ local function checkToolCharge()
   end
 end
 
+local function synchronize()
+  print("Синхронизация...")
+  rs.setOutput(1, 15)
+  if robotNumber == maxRobotNumber then
+    while true do
+      if rs.getInput(0) > 0 then
+        rs.setOutput(0, 15)
+        break
+      end
+      os.sleep(0.5)
+    end
+    while rs.getInput(0) ~= 0 do
+      os.sleep(0.5)
+    end
+  elseif robotNumber == 1 then
+    while true do
+      if rs.getInput(1) > 0 then
+        rs.setOutput(1, 0)
+        break
+      end
+      os.sleep(0.5)
+    end
+  else
+    while true do
+      if rs.getInput(1) > 0 and rs.getInput(0) > 0 then
+        rs.setOutput(0, 15)
+        break
+      end
+      os.sleep(0.5)
+    end
+    while rs.getInput(0) ~= 0 do
+      os.sleep(0.5)
+    end
+  end
+  countSynch = 0
+  rs.setOutput(1, 0)
+  rs.setOutput(0, 0)
+end
+
 local function checkService()
   if countSwing >= numBetChecks then
     countSwing = 0
@@ -282,7 +332,11 @@ local function checkService()
     checkRobotCharge()
     checkInventory()
   end
+  if countSynch == numBlockSynch then
+    synchronize()
+  end
 end
+
 
 local function goToNewCircle()
   print("Круг "..circle)
@@ -298,6 +352,7 @@ local function oneCircle()
     rTurnR()
     for len = 1, circle * 2 do
       rMoveForward()
+      countSynch = countSynch + 1
       checkService()
     end
   end
