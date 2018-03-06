@@ -1,24 +1,43 @@
-local com = require("component")
-local telegram = require("Telegram")
+local computer = require('computer')
+local event = require('event')
+local com = require('component')
+local telegram = require('Telegram')
 
 local ae = com.me_controller
 
-local token = "token" --Токен бота ServerHiTech
-local chat_id = chat_id --chat id username: "Litvinosss"
+local token = '513782400:AAGa_GSu98AgGnA-5wbe7iHXAsEjyomsATs' --Токен бота ServerHiTech
+local chat_id = 386470333 --chat id username: 'Litvinosss'
 local max_string_length = 4000 --Максимальная длина строки для отправки в одном сообщении в телеграмм
 
-local function send_msg_to_telegram(tbl_with_str)
-  for k, v in pairs(tbl_with_str) do
-    telegram.sendMessage(token, chat_id, v)
+local old_items_list = {}
+
+local function send_msg(arg)
+  if type(arg) == 'table' then
+    for k, v in pairs(arg) do
+      telegram.sendMessage(token, chat_id, v)
+    end
+  elseif type(arg) == 'string' then
+    telegram.sendMessage(token, chat_id, arg)
   end
 end
 
-local function getMEItems(itemName)
-  local store_items = ae.getItemsInNetwork() --Получаем все предметы из МЭ сети
-  local tbl_length = store_items.n --Записываем длину таблицы с элементами в переменную
-  local tbl_strings = {[1] = ""} --Создаем таблицу для выходной строки(строк)
+local function get_all_items_list()
+  local stored_items = ae.getItemsInNetwork()
+  local cur_stored_items = {}
+  for i = 1, stored_items.n do --Цикл по таблице со всеми предметами
+    if stored_items[i].label ~= 'Air' and stored_items[i].size > 0 then --Исключаем несуществующие предметы
+      table.insert(cur_stored_items, stored_items[i])
+    end
+  end
+  return cur_stored_items
+end
 
-  local function add_str_to_tbl(str, tbl) --Функция добавления заданой строки в заданую таблицу
+local function get_info_items(all)
+  local stored_items = ae.getItemsInNetwork() --Получаем все предметы из МЭ сети
+  local info_items = {}
+  local strs_tbl = {''}
+
+  local function table_concat(tbl, str)
     if #tbl[#tbl] + #str > max_string_length then --Если длина последнего значения в таблице плюс длина строки которую нужно добавить, превышает значение max_string_length, то добавляем строку в новое поле таблицы
       tbl[#tbl + 1] = str
     else --Если нет, то
@@ -26,57 +45,144 @@ local function getMEItems(itemName)
     end
   end
 
-  if itemName then --Если указано название предмета, то вернуть информацию только об этом предмете
-    for i = 1, tbl_length do
-      if itemName == store_items[i].name or itemName == store_items[i].label then
-        add_str_to_tbl("Info about "..itemName..":\n", tbl_strings)
-        if itemName == store_items[i].name then
-          add_str_to_tbl("Label = "..store_items[i].label.."\n", tbl_strings)
-        elseif itemName == store_items[i].label then
-          add_str_to_tbl("Name = "..store_items[i].name.."\n", tbl_strings)
-        end
-        add_str_to_tbl("Number = "..store_items[i].size.."\n", tbl_strings)
-        if store_items[i].maxSize ~= 64 then
-          add_str_to_tbl("Max num in stack = "..store_items[i].maxSize.."\n", tbl_strings)
-        end
-        if store_items[i].maxDamage ~= 0 then
-          add_str_to_tbl("Damage = "..store_items[i].damage.."\n", tbl_strings)
-          add_str_to_tbl("Max damage = "..store_items[i].maxDamage.."\n", tbl_strings)
-        end
+  local function get_all_items()
+    table_concat(strs_tbl, 'Info about all items: \n')
+    for i = 1, stored_items.n do --Цикл по таблице со всеми предметами
+      if stored_items[i].label ~= 'Air' and stored_items[i].size > 0 then --Исключаем несуществующие предметы
+        table.insert(info_items, {stored_items[i].label, stored_items[i].size})
       end
     end
-    if tbl_strings[#tbl_strings] == "" then --Если указанный предмет не совпал ни с одним из существующих, таблица содержит пустую строку
-      add_str_to_tbl("Info about this item is missing", tbl_strings)
-    end
-  else --Название предмета не указано, вернуть информацию о всех предметах
-    add_str_to_tbl("Info about all items: ".."\n", tbl_strings) --Добавляем начальную строку в таблицу
-    local num_item = 0 --Подсчет реального количества предметов без учета Air
-    for i = 1, tbl_length do --Цикл по таблице со всеми предметами
-      if store_items[i].label ~= "Air" then --Исключаем Air
-        num_item = num_item + 1 --Повышаем количество реальных предметов на 1
-        --Соединяем в одну строку название предмета и его количество, в конце добавляем перенос строки
-        local str_items = num_item..") "..store_items[i].label.." = "..store_items[i].size.."\n"
-        add_str_to_tbl(str_items, tbl_strings) --Добавляем сформированную строку в таблицу
-      end
+    table.sort(info_items, function(lhs, rhs) return lhs[2] > rhs[2] end) --Сортируем таблицу в порядке убывания
+    for k, v in pairs(info_items) do
+      table_concat(strs_tbl, k..') '..v[1]..' = '..v[2]..'\n')
     end
   end
-  return tbl_strings
+
+  local function get_item(item_name)
+    for i = 1, stored_items.n do
+      local lbl = stored_items[i].label:lower()
+      local name = stored_items[i].name:lower()
+      if item_name == lbl or item_name == name then
+        table_concat(strs_tbl, 'Info about '..stored_items[i].label..':\n')
+        table_concat(strs_tbl, 'Name = '..stored_items[i].name..'\n')
+        table_concat(strs_tbl, 'Quantity = '..stored_items[i].size..'\n')
+        if stored_items[i].maxSize ~= 64 then
+          table_concat(strs_tbl, 'Max num in stack = '..stored_items[i].maxSize..'\n')
+        end
+        if stored_items[i].maxDamage ~= 0 then
+          table_concat(strs_tbl, 'Damage = '..stored_items[i].damage..'\n')
+          table_concat(strs_tbl, 'Max damage = '..stored_items[i].maxDamage..'\n')
+        end
+      end
+    end
+    if strs_tbl[1] == '' then --Если указанный предмет не совпал ни с одним из существующих, таблица содержит пустую строку
+      table_concat(strs_tbl, 'Info about this item is missing')
+    end
+  end
+
+  if all then
+    all = all:lower()
+    if all == 'all' then
+      get_all_items()
+    else
+      get_item(all)
+    end
+    return strs_tbl
+  end
 end
 
-while true do
-  local received_msg_from_telegram = telegram.receiveMessages(token)
-  if received_msg_from_telegram[1] then
-    local received_msg_text = received_msg_from_telegram[1].text
-    print("Receive messages: "..received_msg_text)
-    if received_msg_text == "Test" or received_msg_text == "test" or received_msg_text == "Тест" or received_msg_text == "тест" then
-      telegram.sendMessage(token, chat_id, "Заебал своими тестами")
-    else
-      if received_msg_text == "getMEItems" then
-        send_msg_to_telegram(getMEItems())
-      else
-        send_msg_to_telegram(getMEItems(received_msg_text))
+local function compare_items(item)
+  for k, v in pairs(old_items_list) do -- Цикл по старом списке предметов
+    if item.label == v.label and item.name == v.name then -- Если label и name текущего предмета равны старому предмету
+      table.remove(old_items_list, k)
+      -- old_items_list[k] = nil
+      if item.size ~= v.size then -- Если количество текущего и старого предмета НЕ равно, то возвращаем разницу
+        return {['label'] = item.label, ['name'] = item.name, ['old_size'] = v.size, ['cur_size'] = item.size, ['value_changed'] = item.size - v.size}
+      else -- Если количество равно
+        return false
       end
     end
   end
-  os.sleep(1)
+  return {['label'] = item.label, ['name'] = item.name, ['old_size'] = 0, ['cur_size'] = item.size, ['value_changed'] = item.size} -- Если весь цикл завершился и не было найдено совпадения, значит это новый предмет в текущем списке. Возвращаем его количество
 end
+
+local function check_num_items()
+  local changed_items = {} -- Сюда будем записывать предметы количество которых было изменено
+
+  for k, v in pairs(get_all_items_list()) do -- Цикл по текущему списку предметов
+    local chen_item = compare_items(v)
+    if chen_item then -- Если количество предмета изменилось
+      table.insert(changed_items, chen_item)
+    end
+  end
+
+  for k, v in pairs(old_items_list) do -- Добавляем всё то что осталось в старом списке(в новом списке таких предметов вообще нет) в список предметов количество которых изменилось
+    table.insert(changed_items, {['label'] = v.label, ['name'] = v.name, ['old_size'] = v.size, ['cur_size'] = 0, ['value_changed'] = -v.size})
+  end
+
+  old_items_list = get_all_items_list() -- Обновляем старый лист предметов на текущий лист предметов
+
+  if #changed_items > 0 then -- Если есть предметы количество которых изменилось
+    local str_to_send = "Items whose quantity has been changed:\nList format: [item label] = [old quantity], [current quantity], [difference]"
+    for k, v in pairs(changed_items) do
+      str_to_send = str_to_send..'\n'..k..') '..v.label..' = '..v.old_size..', '..v.cur_size..', '..v.value_changed
+    end
+    return str_to_send
+  else
+    return 'The quantity of items has not changed'
+  end
+end
+
+local functions = {
+  ['get_info'] = function(arg)
+    send_msg(get_info_items(arg))
+  end,
+
+  ['get_difference'] = function()
+    send_msg(check_num_items())
+  end,
+
+  ['send_me'] = function(arg)
+    if arg then
+      send_msg(arg)
+    else
+      send_msg('Missing argument')
+    end
+  end,
+
+  ['computer'] = function(arg)
+    if arg == 'reboot' then
+      send_msg('Restarting the computer...')
+      computer.shutdown(true)
+    end
+  end,
+}
+
+local function go(msg)
+  local func = msg:match('%S+'):lower()
+  if functions[func] then
+    local arg = msg:match('%s+.+')
+    if arg then
+      arg = arg:match('%S+.*'):lower()
+    end
+    functions[func](arg)
+  else
+    send_msg('Inexact command')
+  end
+end
+
+telegram.getUpdates(token)
+send_msg('The computer is running')
+old_items_list = get_all_items_list()
+
+while true do
+  local received_msg = telegram.receiveMessages(token)
+  if received_msg[1] then
+    go(received_msg[1].text)
+    print(received_msg[1].text)
+  end
+  os.sleep(3)
+end
+
+-- event.timer(1, check_num_items)
+-- os.sleep(5)
