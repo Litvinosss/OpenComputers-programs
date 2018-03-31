@@ -5,8 +5,8 @@ local telegram = require('Telegram')
 
 local ae = com.me_controller
 
-local token = '513782400:AAGa_GSu98AgGnA-5wbe7iHXAsEjyomsATs' --Токен бота ServerHiTech
-local chat_id = 386470333 --chat id username: 'Litvinosss'
+local token = '' --Токен бота ServerHiTech
+local chat_id = chatId --chat id username:
 local max_string_length = 4000 --Максимальная длина строки для отправки в одном сообщении в телеграмм
 
 local old_items_list = {}
